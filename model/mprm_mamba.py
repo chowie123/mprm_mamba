@@ -14,7 +14,7 @@ from mamba_ssm import Mamba
 
 
 # ------------------------------
-# 实用块：残差缩放 / DropPath
+# 残差缩放 / DropPath
 # ------------------------------
 class ResidualScale(nn.Module):
     def __init__(self, init_value: float = 1e-3):
@@ -65,7 +65,7 @@ class LayerNorm(nn.Module):
 
 
 # ------------------------------
-# 基础块：SE3D / FRM / GSC / MlpChannel
+# SE3D / FRM / GSC / MlpChannel
 # ------------------------------
 class SE3D(nn.Module):
     def __init__(self, channels: int, reduction: int = 4):
@@ -91,10 +91,6 @@ class DepthwiseConv3d(nn.Conv3d):
 
 
 class FRM(nn.Module):
-    """
-    稳态版 FRM：IN/LN -> 1x1 -> SE -> split -> DWConv -> Sigmoid -> * -> 1x1 -> 残差缩放
-    I/O: C -> C
-    """
     def __init__(self, channels: int, use_instance_norm: bool = True, dw_k: int = 5,
                  res_init: float = 1e-3, drop_path: float = 0.0):
         super().__init__()
@@ -123,7 +119,7 @@ class FRM(nn.Module):
 
 
 class GSC(nn.Module):
-    """轻量卷积块（保持你的工程风格）"""
+    
     def __init__(self, in_channels: int, drop_path: float = 0.0) -> None:
         super().__init__()
         self.proj = nn.Conv3d(in_channels, in_channels, 3, 1, 1)
@@ -151,7 +147,7 @@ class GSC(nn.Module):
 
 
 class MlpChannel(nn.Module):
-    """每层输出前的 1x1-MLP"""
+    
     def __init__(self, hidden_size: int, mlp_dim: int):
         super().__init__()
         self.fc1 = nn.Conv3d(hidden_size, mlp_dim, 1)
@@ -193,7 +189,7 @@ class CrossDirectionalGating3(nn.Module):
 
 
 # ------------------------------
-# 每模态内部：三正交方向 Mamba（稳定化 LMB）
+# 每模态内部：三正交方向 Mamba
 # ------------------------------
 class DirectionalMamba3D(nn.Module):
     """
@@ -214,7 +210,7 @@ class DirectionalMamba3D(nn.Module):
         self.ln_co = nn.LayerNorm(dim)
         self.ln_sa = nn.LayerNorm(dim)
 
-        # 可选 token 维降维（节省显存）
+        # 可选 token 维降维
         self.pool_reduce = pool_reduce
         if pool_reduce > 1:
             self.reduce = nn.Conv1d(dim, dim // pool_reduce, kernel_size=1, bias=False)
@@ -282,7 +278,7 @@ class DirectionalMamba3D(nn.Module):
 
 
 # ------------------------------
-# 3D Patch Tokenizer / Unpatchifier（用于 MPRM）
+# 3D Patch Tokenizer / Unpatchifier
 # ------------------------------
 class PatchTokenizer3D(nn.Module):
     """
@@ -380,7 +376,7 @@ class ConditionalMamba1D(nn.Module):
 
 
 # ------------------------------
-# 论文版 MPRM：跨模态 C 矩阵读出 + α 权重 + 旁路重要性门控
+# MPRM：跨模态 C 矩阵读出 + α 权重 + 旁路重要性门控
 # ------------------------------
 class MPRM_Perspective(nn.Module):
     """
@@ -512,12 +508,12 @@ class MPRM_Perspective(nn.Module):
                 continue
             vol = PatchTokenizer3D.unpatchify(Ys[i], infos[i], out_channels=self.embed_dim)  # (B,E,Db_pad,Hb_pad,Wb_pad)
             vol = PatchTokenizer3D.crop_to_orig(vol, infos[i]["orig"])                        # (B,E,Db,Hb,Wb)
-            vol = self.out_norm(vol)                                                          # Ẏ_i
+            vol = self.out_norm(vol)                                                          
             M = torch.nn.functional.silu(bypass_feats[i])                                     # (B,E,Db,Hb,Wb) 或 (B,1,Db,Hb,Wb)
             if M.shape[1] == 1:
                 M = M.expand_as(vol)
             vol = M * vol                                                                     # Z_i
-            vol = self.post_proj[i](vol)                                                      # 可省略，保留接口
+            vol = self.post_proj[i](vol)                                                      
             fused = fused + vol
 
         return fused  # (B,E,Db,Hb,Wb)
@@ -604,7 +600,7 @@ class MambaEncoder(nn.Module):
             x = self.mlps[i](x)
             outs.append(x)
 
-            # 下一层输入：用 1×1 可学习压缩对齐（不再截断通道）
+            # 下一层输入：用 1×1 可学习压缩对齐
             x0 = self.carry_reduce[i](f0)
             x1 = self.carry_reduce[i](f1)
             x2 = self.carry_reduce[i](f2)
@@ -616,9 +612,9 @@ class MambaEncoder(nn.Module):
 
 
 # ------------------------------
-# SegMamba（整合稳态改造）
+# MprmMamba（整合稳态改造）
 # ------------------------------
-class SegMamba(nn.Module):
+class MprmMamba(nn.Module):
     def __init__(
         self,
         in_chans: int = 1,
@@ -703,7 +699,7 @@ class SegMamba(nn.Module):
         )
         self.out = UnetOutBlock(spatial_dims=spatial_dims, in_channels=self.feat_size[0], out_channels=self.out_chans)
 
-        # 瓶颈 MPRM（论文版，添加零初始化门控残差）
+        # 瓶颈 MPRM
         self.use_mprm = use_mprm
         if self.use_mprm:
             self.mprm = MPRM_Perspective(
