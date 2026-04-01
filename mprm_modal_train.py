@@ -121,12 +121,11 @@ class BraTSTrainer(Trainer):
                                                  sw_batch_size=1,
                                                  overlap=0.5)
         self.augmentation = augmentation
-        # from model_segmamba.muti_modal_mamba import SegMamba
-        from muti_mamba.model_segmamba.muti_mamba import SegMamba
         
-        # from i11111111muti_mamba import SegMamba
+        from mprm_mamba.model.mprm_mamba import MprmMamba
+        
 
-        self.model = SegMamba(in_chans=1,
+        self.model = MprmMamba(in_chans=1,
                               out_chans=4,
                               depths=[2, 2, 2, 2],
                               feat_size=[48, 96, 192, 384])
@@ -279,8 +278,6 @@ class BraTSTrainer(Trainer):
         self.hd95_global = []
 
 if __name__ == "__main__":
-    # pretrained_weights_path = "/DATA/panxiang/MWL/SegMamba-main/logs/ssa_segmamba/model/RU_FT_best_model_0.9201.pt"  # 预训练权重的路径RU_FT_best_model_0.9201
-    pretrained_weights_path = None  # 预训练权重的路径,10轮，替换0-15块且加模块2，78%
     trainer = BraTSTrainer(env_type=env,
                            max_epochs=max_epoch,
                            batch_size=batch_size,
